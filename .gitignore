@@ -14,10 +14,8 @@ env/
 
 # Local data and generated outputs
 data/raw/
-data/processed/*
-!data/processed/.gitkeep
-outputs/*
-!outputs/.gitkeep
+data/processed/
+outputs/
 *.h5
 *.keras
 *.joblib
@@ -25,4 +23,3 @@ outputs/*
 *.npz
 *.xlsx
 *.xls
-
