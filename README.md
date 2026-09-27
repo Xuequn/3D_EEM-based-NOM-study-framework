@@ -70,10 +70,6 @@ python scripts/05_twodcos.py --data-dir data/processed --clusters outputs/cluste
 
 Predictive performance is reported from leave-one-source-out validation. The model fitted to all samples is used only for Grad-RAM, MDA, and clustering.
 
-## Data availability
-
-The study dataset is not publicly available at this stage. It may be made available by the corresponding author upon reasonable request, subject to applicable research and institutional requirements. Raw data, labels, trained models, and generated outputs are not included in this repository.
-
 ## Documentation
 
 - [Manuscript to code map](docs/MANUSCRIPT_CODE_MAP.md)
