@@ -1,127 +1,126 @@
-# 3D_EEM-based-NOM-study-framework
-Project Overview
-This project develops a Convolutional Neural Network (CNN)-based prediction model (RCPM) that directly predicts organic matter redox capacity from 3D excitation-emission matrix (EEM) fluorescence spectra. The framework not only achieves high-precision predictions but also provides interpretable model decisions through Grad-RAM and MDA visualization techniques. Hierarchical clustering based on MDA features enables intrinsic sample classification by spectral patterns and redox functionality.
+# Interpretable EEM framework for humic-acid reducing capacity
 
+This repository contains the analysis workflow accompanying **“Fluorescence Encodes Reducing Capacity: The inferred electronic-structure changes of humic acid from Interpretable Deep Learning.”** It predicts solution reducing capacity from excitation-emission matrices (EEMs), evaluates transfer to a humic-acid source excluded from training, and links the learned representation to spectral reorganization.
 
+## Workflow overview
 
-Key Features
-Data Preprocessing - Complete pipeline from raw instrument data to standardized fluorescence matrices
+The workflow includes:
 
-Dual Training Modes:
+- direct coordinate assignment to an 81 × 81 Ex/Em grid without interpolation;
+- explicit preservation of unmeasured positions as `NaN` and a binary coverage mask;
+- leave-one-source-out (LOSO) validation across PPHA, ESHA, and LHA;
+- a common-input comparison of PLSR, random forest, XGBoost, and a zero-filled CNN;
+- sensitivity analyses using mask-aware and masked-convolution CNNs;
+- Grad-RAM, manifold discovery and analysis (MDA), Ward clustering, and generalized 2D-COS.
 
-Raw Data Mode: Direct training using preprocessed fluorescence matrices
+## Repository layout
 
-Image Mode: Training on visualized fluorescence data as images
+```text
+src/eem_rc/
+  data.py          EEM alignment, mask construction, and dataset I/O
+  models.py        CNN architectures and masked convolution
+  evaluate.py      LOSO evaluation for baselines and CNN variants
+  interpret.py     Full-data RCPM fit, Grad-RAM, and feature extraction
+  clustering.py    MDA package call, Ward clustering, and epsilon-squared selection
+  twodcos.py       Cluster-pair generalized 2D correlation spectroscopy
+scripts/           Command-line entry scripts
+tests/             Fast tests using synthetic data
+data/              Local inputs; large/private files are not committed
+outputs/           Generated models, tables, and figures
+```
 
-Model Interpretability - Grad-RAM and MDA techniques to reveal decision mechanisms
+## Installation
 
-Feature Analysis & Clustering - Hierarchical clustering based on MDA-reduced features
+The workflow uses two environments because the RCPM analysis and the MDA implementation require different TensorFlow and Python versions.
 
-Transfer Learning - Fine-tuning pre-trained models on new data
+Create the main analysis environment:
 
+```bash
+conda env create -f RCPM_PREDICT.yml
+conda activate RCPM_PREDICT
+pip install -e . --no-deps
+```
 
+Create the separate environment used only for the MDA projection and its immediately coupled clustering step:
 
-Project Structure
-Project Directory/
-├── 1.filepath_excel.py              # Collect image file paths
-├── 2.extract_data_point.py          # Extract data points from Excel
-├── 3.delete_blank.py               # Blank value subtraction
-├── 4.Raman_normalization.py        # Raman normalization
-├── 5.scatter_remove.py             # Scatter region removal & interpolation
-├── (6)dataset_matrix.py            # Create standardized dataset (raw data mode)
-├── (7).pure_data_CNN.py            # Raw data CNN training
-├── (8).gradram_pure_data.py        # Raw data Grad-RAM visualization
-├── 6.excel_to_fig.py               # Data to image conversion
-├── 7.Plotted_predict.py            # Image mode CNN training
-├── 8.grad_ram.py                   # Image mode Grad-RAM visualization
-├── 9_*.py series                   # Feature extraction & MDA analysis
-├── 10.cluster_feature.py           # Hierarchical clustering analysis
-├── transfer_learning.py            # Transfer learning
-├── mda.py                          # MDA algorithm implementation
-└── Configuration & Data/
-    ├── sample_blank.xlsx           # Sample-blank reference table
-    ├── sample_raman_integral.xlsx  # Raman integral values
-    ├── image_path_label.xlsx       # Image path-label mapping
-    └── Various output directories/
-        ├── extracted_data/         # Extracted data
-        ├── blank_delete/           # Blank-corrected data
-        ├── raman_normalized/       # Raman-normalized data
-        ├── interpolated/           # Interpolated data
-        ├── images/                 # Generated EEM images
-        ├── heatmaps/               # Grad-RAM heatmaps
-        └── cluster_*/              # Clustering results
+```bash
+conda env create -f MDA.yml
+conda activate MDA
+pip install -e . --no-deps
+```
 
+`RCPM_PREDICT` reproduces the study's Python 3.9/TensorFlow 2.19 workflow. `MDA` reproduces the Python 3.10/TensorFlow 2.8.2 environment used by the upstream MDA implementation.
 
+## Expected input
 
+Each EEM workbook contains emission wavelengths in the first row, excitation wavelengths in the first column, and fluorescence intensity values in the remaining cells, matching the orientation used in the original study files. The label workbook must contain:
 
-Environment Setup
-This project requires two separate Conda environments due to dependency conflicts:
+| column | meaning |
+|---|---|
+| `filename` | workbook filename, including extension |
+| `label` | measured reducing capacity in meq L⁻¹ |
 
-Environment 1: RCPM_PREDICT (Main Environment)
+Filenames must begin with `PPHA`, `ESHA`, or `LHA` so that the LOSO groups can be reconstructed.
 
-Environment 2: MDA (MDA Analysis Only)
+## Reproduce the workflow
 
+1. Build the aligned dataset:
 
+```bash
+python scripts/01_prepare_dataset.py --eem-dir data/raw/eem --labels data/raw/labels.xlsx --output-dir data/processed
+```
 
-Usage Workflow
+2. Run the common zero-filled benchmark:
 
-Phase 1: Data Preprocessing (Scripts 1-5)
-Collect file paths (1.filepath_excel.py)
+```bash
+python scripts/02_evaluate.py --data-dir data/processed --output-dir outputs/benchmark --models plsr rf xgboost zero_cnn
+```
 
-Extract data points (2.extract_data_point.py)
+3. Run the missing-region sensitivity analysis:
 
-Subtract blank values (3.delete_blank.py) - Requires sample_blank.xlsx
+```bash
+python scripts/02_evaluate.py --data-dir data/processed --output-dir outputs/mask_sensitivity --models mask_aware_cnn masked_conv_cnn
+```
 
-Raman normalization (4.Raman_normalization.py) - Requires sample_raman_integral.xlsx
+4. Fit the full-data mask-aware RCPM and extract interpretation products:
 
-Scatter removal & interpolation (5.scatter_remove.py)
+```bash
+python scripts/03_interpret.py --data-dir data/processed --output-dir outputs/interpretation
+```
 
+5. Switch to the dedicated MDA environment, then run MDA and hierarchical clustering:
 
+```bash
+conda activate MDA
+python scripts/04_cluster.py --data-dir data/processed --interpret-dir outputs/interpretation --output-dir outputs/clustering
+```
 
-Phase 2A: Raw Data Mode Training
-Create standardized dataset ((6)dataset_matrix.py)
+6. Return to the main environment and run 2D-COS for the C1-C2 and C2-C3 transitions at Em = 425 and 490 nm:
 
-CNN model training ((7).pure_data_CNN.py)
+```bash
+conda activate RCPM_PREDICT
+python scripts/05_twodcos.py --data-dir data/processed --clusters outputs/clustering/clusters_k3.csv --output-dir outputs/twodcos
+```
 
-Grad-RAM visualization ((8).gradram_pure_data.py)
+The full-data model is used only to create a common feature space for interpretation. Predictive performance must be reported from the LOSO results.
 
-Data from model preparation for MDA ((9_1).labels_pred.py; (9_2).extract features.py; )
+## Data availability
 
-MDA feature analysis ((9_3).MDA.py)- Requires switching to MDA environment
+The study dataset is not publicly available at this stage. It may be made available by the corresponding author upon reasonable request, subject to applicable research and institutional requirements. Raw EEM workbooks, labels, trained model files, and generated analysis outputs are not included in this repository. Authorized users should place local input files under `data/raw/`.
 
-Hierarchical clustering (10.cluster_feature.py)
+## Reproducibility notes
 
+- TensorFlow and NumPy seeds are fixed, but exact GPU results can vary across hardware and library builds.
+- Feature scaling and label scaling are fitted only on each training subset during LOSO validation.
+- The mask channel is never intensity-normalized; only the fluorescence channel is divided by the training maximum.
+- Cluster labels are reordered as C1-C3 by increasing mean measured reducing capacity.
 
+## Citation
 
-Phase 2B:Image Mode Training
-Data to image conversion (6.excel_to_fig.py)
+Please cite the associated article. Bibliographic details and DOI will be added after publication.
 
-Image mode CNN training (7.Plotted_predict.py)
+## License
 
-Grad-RAM visualization (8.grad_ram.py)
+The source code is released under the [MIT License](LICENSE). Users may use, modify, and redistribute the code, including for commercial purposes, provided that the copyright and license notices are retained. Academic users are requested to cite the associated article when using this workflow in published research.
 
-Data from model preparation  for MDA(9_1.labels_to_npy.py; 9_2.labels_pred.py; 9_3.extract features.py)
-
-Image preparation for MDA (9_4.extract_heatmap&image.py)
-
-MDA feature analysis (9_5.MDA_plotted.py) - Requires switching to MDA environment
-
-Hierarchical clustering (10.cluster_feature.py)
-
-
-
-Transfer Learning
-transfer_learning.py - Fine-tune pre-trained models
-
-
-
-Configuration
-Each script contains path variables that need updating:
-
-Data paths: Point to your EEM data directories
-
-Label files: Excel files with sample filenames and corresponding reducing capacity labels
-
-Output directories: Results storage locations for each processing step
-
-Auxiliary files: sample_blank.xlsx, sample_raman_integral.xlsx.
+The separately installed MDA implementation is third-party software and is not covered by this repository's MIT License. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for its citation, source, and upstream license restrictions.
